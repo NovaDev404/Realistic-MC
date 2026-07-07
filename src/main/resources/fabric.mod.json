@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "realisticmc",
+  "version": "${version}",
+  "name": "Realistic MC",
+  "description": "Smooth terrain rendering using Surface Nets algorithm",
+  "authors": [
+    "NovaDev404"
+  ],
+  "contact": {
+    "homepage": "https://github.com/NovaDev404/Realistic-MC",
+    "sources": "https://github.com/NovaDev404/Realistic-MC"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.novadev404.realisticmc.RealisticMCClient"
+    ]
+  },
+  "mixins": [
+    "realisticmc.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~26.1.2",
+    "java": ">=25"
+  }
+}
