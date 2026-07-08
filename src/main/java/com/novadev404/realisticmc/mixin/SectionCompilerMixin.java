@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.novadev404.realisticmc.terrain.SmoothTerrainMeshGenerator;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.chunk.SectionCompiler;
@@ -28,6 +29,18 @@ public class SectionCompilerMixin {
     @Inject(method = "compile", at = @At("HEAD"))
     private void realisticmc$beforeCompile(SectionBufferBuilderPack buffers, CallbackInfo ci) {
         // Generate smooth terrain before vanilla block rendering
+        // Add null checks to prevent crashes during initialization
+        if (level == null || sectionPos == null) {
+            return;
+        }
+        
+        // Only generate smooth terrain if the player exists and world is fully loaded
+        // This prevents crashes during initial world generation/loading
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null || minecraft.level == null) {
+            return;
+        }
+        
         SmoothTerrainMeshGenerator generator = new SmoothTerrainMeshGenerator(level, sectionPos, true);
         
         // Get the ByteBufferBuilder for the solid render layer and wrap it in BufferBuilder
