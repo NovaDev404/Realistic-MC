@@ -13,6 +13,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class BilateralTerrainMesh {
     private static final int RADIUS = 2;
+    private static final int SUBDIVISIONS = 4;
     private static final float SIGMA_SPACE = 1.65f;
     private static final float SIGMA_HEIGHT = 3.0f;
     private static final float CLIFF_HEIGHT = 4.0f;
@@ -60,14 +61,24 @@ public final class BilateralTerrainMesh {
                     continue;
                 }
 
-                Vec3 v00 = new Vec3(gx, smoothHeights[gx][gz] - originY + 1.015f, gz);
-                Vec3 v10 = new Vec3(gx + 1, smoothHeights[gx + 1][gz] - originY + 1.015f, gz);
-                Vec3 v11 = new Vec3(gx + 1, smoothHeights[gx + 1][gz + 1] - originY + 1.015f, gz + 1);
-                Vec3 v01 = new Vec3(gx, smoothHeights[gx][gz + 1] - originY + 1.015f, gz + 1);
-                Vec3 normal = normal(v00, v10, v11);
-                int color = colorFor(s00, s10, s11, s01, normal);
+                for (int sx = 0; sx < SUBDIVISIONS; sx++) {
+                    float x0 = gx + sx / (float) SUBDIVISIONS;
+                    float x1 = gx + (sx + 1) / (float) SUBDIVISIONS;
+                    for (int sz = 0; sz < SUBDIVISIONS; sz++) {
+                        float z0 = gz + sz / (float) SUBDIVISIONS;
+                        float z1 = gz + (sz + 1) / (float) SUBDIVISIONS;
 
-                mesh.quads.add(new Quad(v00, v10, v11, v01, normal, color, s00.state, s00.blockPos));
+                        Vec3 v00 = new Vec3(x0, roundedHeightAt(smoothHeights, x0, z0) - originY + 1.015f, z0);
+                        Vec3 v10 = new Vec3(x1, roundedHeightAt(smoothHeights, x1, z0) - originY + 1.015f, z0);
+                        Vec3 v11 = new Vec3(x1, roundedHeightAt(smoothHeights, x1, z1) - originY + 1.015f, z1);
+                        Vec3 v01 = new Vec3(x0, roundedHeightAt(smoothHeights, x0, z1) - originY + 1.015f, z1);
+                        Vec3 normal = normal(v00, v10, v11);
+                        Sample textureSample = textureSampleForQuad(s00, s10, s11, s01, normal);
+                        int color = colorFor(s00, s10, s11, s01, normal);
+
+                        mesh.quads.add(new Quad(v00, v10, v11, v01, normal, color, textureSample.state, textureSample.blockPos));
+                    }
+                }
                 hide(mesh, s00, originY);
                 hide(mesh, s10, originY);
                 hide(mesh, s11, originY);
@@ -118,6 +129,10 @@ public final class BilateralTerrainMesh {
             return center.height;
         }
 
+        if (isLocalExtremum(samples, gx, gz, size)) {
+            return center.height;
+        }
+
         float weightedSum = 0.0f;
         float totalWeight = 0.0f;
 
@@ -149,6 +164,86 @@ public final class BilateralTerrainMesh {
         }
 
         return totalWeight <= 0.0001f ? center.height : weightedSum / totalWeight;
+    }
+
+    private static boolean isLocalExtremum(Sample[][] samples, int gx, int gz, int size) {
+        Sample center = samples[gx][gz];
+        boolean allLower = true;
+        boolean allHigher = true;
+
+        for (int ox = -RADIUS; ox <= RADIUS; ox++) {
+            for (int oz = -RADIUS; oz <= RADIUS; oz++) {
+                if (ox == 0 && oz == 0) {
+                    continue;
+                }
+
+                int nx = gx + ox;
+                int nz = gz + oz;
+                if (nx < 0 || nz < 0 || nx >= size || nz >= size) {
+                    continue;
+                }
+
+                Sample neighbor = samples[nx][nz];
+                if (!neighbor.renderable || center.materialGroup != neighbor.materialGroup) {
+                    continue;
+                }
+
+                if (neighbor.height >= center.height - 0.001f) {
+                    allLower = false;
+                }
+
+                if (neighbor.height <= center.height + 0.001f) {
+                    allHigher = false;
+                }
+            }
+        }
+
+        return allLower || allHigher;
+    }
+
+    private static float roundedHeightAt(float[][] heights, float x, float z) {
+        int ix = (int) Math.floor(x);
+        int iz = (int) Math.floor(z);
+        float tx = smoothStep(x - ix);
+        float tz = smoothStep(z - iz);
+
+        float h00 = sampleHeight(heights, ix, iz);
+        float h10 = sampleHeight(heights, ix + 1, iz);
+        float h01 = sampleHeight(heights, ix, iz + 1);
+        float h11 = sampleHeight(heights, ix + 1, iz + 1);
+
+        float hx0 = lerp(h00, h10, tx);
+        float hx1 = lerp(h01, h11, tx);
+        return lerp(hx0, hx1, tz);
+    }
+
+    private static float sampleHeight(float[][] heights, int x, int z) {
+        int clampedX = Math.max(0, Math.min(heights.length - 1, x));
+        int clampedZ = Math.max(0, Math.min(heights[0].length - 1, z));
+        return heights[clampedX][clampedZ];
+    }
+
+    private static float smoothStep(float value) {
+        float clamped = Math.max(0.0f, Math.min(1.0f, value));
+        return clamped * clamped * (3.0f - 2.0f * clamped);
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    private static Sample textureSampleForQuad(Sample s00, Sample s10, Sample s11, Sample s01, Vec3 normal) {
+        Sample lowest = s00;
+        if (s10.height < lowest.height) lowest = s10;
+        if (s11.height < lowest.height) lowest = s11;
+        if (s01.height < lowest.height) lowest = s01;
+
+        Sample highest = s00;
+        if (s10.height > highest.height) highest = s10;
+        if (s11.height > highest.height) highest = s11;
+        if (s01.height > highest.height) highest = s01;
+
+        return Math.abs(normal.y) >= 0.55f ? highest : lowest;
     }
 
     private static float gaussian(float valueSq, float sigma) {
