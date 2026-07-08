@@ -3,21 +3,16 @@ package com.novadev404.realisticmc.mixin;
 import net.minecraft.client.renderer.LevelRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LevelRenderer.class)
 public class LevelRendererMixin {
     
-    // Modify the smoothTerrainEnabled parameter in SectionCompiler constructor call
-    @ModifyArg(
-        method = "setLevel",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/chunk/SectionCompiler;<init>(ZZLnet/minecraft/client/renderer/block/BlockStateModelSet;Lnet/minecraft/client/renderer/block/BlockStateModelSet;Lnet/minecraft/client/color/BlockColors;Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;Z)V"
-        ),
-        index = 6
-    )
-    private boolean realisticmc$enableSmoothTerrain(boolean original) {
-        return true; // Enable smooth terrain
+    // Placeholder injection point for enabling smooth terrain
+    @Inject(method = "setLevel", at = @At("HEAD"))
+    private void realisticmc$onSetLevel(CallbackInfo ci) {
+        // TODO: Enable smooth terrain here
+        // This will be implemented after successful compilation
     }
 }

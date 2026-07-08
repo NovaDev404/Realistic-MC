@@ -1,27 +1,29 @@
 plugins {
-    id 'fabric-loom' version '1.7-SNAPSHOT'
+    // 1. MUST use the modern unobfuscated plugin ID for Minecraft 26.1.2+
+    id 'net.fabricmc.fabric-loom' version '1.17.11'
     id 'maven-publish'
 }
 
 version = project.mod_version
 group = project.maven_group
 
+base {
+    archivesName = project.archives_base_name
+}
+
+// LEAVE THIS EMPTY: Loom defaults to a standard unified environment
+loom {
+    // No split environments needed since your environment is purely 'client'
+}
+
 repositories {
-    maven {
-        name = "Fabric"
-        url = "https://maven.fabricmc.net/"
-    }
-    mavenCentral()
+    // Loom automatically adds essential repositories for Minecraft and basic libraries.
+    // Add additional repositories here if you need external libraries/mods.
 }
 
 dependencies {
-    // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-    // Fabric API
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 }
 
 processResources {
@@ -33,16 +35,20 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
+    // Minecraft 26.1+ requires Java 25 compiled binaries
     it.options.release = 25
 }
 
 java {
+    // Loom will automatically choose the appropriate toolchain if configured
+    withSourcesJar()
+
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
 }
 
 jar {
     from("LICENSE") {
-        rename { "${it}_${project.archivesBaseName}"}
+        rename { "${it}_${project.archives_base_name}"}
     }
 }
