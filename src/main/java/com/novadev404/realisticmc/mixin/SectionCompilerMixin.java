@@ -25,18 +25,11 @@ public class SectionCompilerMixin {
     @Shadow
     private SectionPos sectionPos;
     
-    // DISABLED - The crash is in LevelRenderer.update, not our code
-    // Chunk compilation during world loading triggers LevelRenderer to access player before it's ready
-    // Need to find a different approach that doesn't interfere with initial world loading
-    
-    // Inject at the beginning of compile() to add smooth terrain generation
-    @Inject(method = "compile", at = @At("HEAD"))
-    private void realisticmc$beforeCompile(SectionBufferBuilderPack buffers, CallbackInfo ci) {
-        // DISABLED - crashes during world loading
-        return;
-        
-        /*
-        // Generate smooth terrain before vanilla block rendering
+    // Inject at the END of compile() to add smooth terrain generation
+    // This runs after vanilla block compilation, reducing interference with initialization
+    @Inject(method = "compile", at = @At("RETURN"))
+    private void realisticmc$afterCompile(SectionBufferBuilderPack buffers, CallbackInfo ci) {
+        // Generate smooth terrain after vanilla block compilation
         // Add null checks to prevent crashes during initialization
         if (level == null || sectionPos == null) {
             return;
@@ -62,6 +55,5 @@ public class SectionCompilerMixin {
             // If buffer access fails, fall back to no-vertex output
             generator.generateSmoothTerrain();
         }
-        */
     }
 }
