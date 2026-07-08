@@ -1,16 +1,24 @@
 package com.novadev404.realisticmc;
 
+import com.novadev404.realisticmc.terrain.SmoothTerrainRenderer;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 
 public class RealisticMCClient implements ClientModInitializer {
-    // Set this to true to enable smooth terrain
-    // WARNING: May cause crash during world loading - enable after joining world
-    public static boolean smoothTerrainEnabled = false;
+    public static boolean smoothTerrainEnabled = true;
+
+    private final SmoothTerrainRenderer smoothTerrainRenderer = new SmoothTerrainRenderer();
     
     @Override
     public void onInitializeClient() {
-        System.out.println("Realistic MC: Smooth terrain rendering initialized");
-        System.out.println("Realistic MC: Set smoothTerrainEnabled to true in code to enable");
-        System.out.println("Realistic MC: Recommended: enable after joining a world to avoid crashes");
+        LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
+            if (smoothTerrainEnabled) {
+                smoothTerrainRenderer.render(context);
+            } else {
+                smoothTerrainRenderer.clear();
+            }
+        });
+
+        System.out.println("Realistic MC: bilateral smooth terrain renderer initialized");
     }
 }
