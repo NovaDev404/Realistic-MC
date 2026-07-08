@@ -2,7 +2,9 @@
   "required": true,
   "package": "com.novadev404.realisticmc.mixin",
   "compatibilityLevel": "JAVA_25",
-  "mixins": [],
+  "mixins": [
+    "SectionCompilerMixin"
+  ],
   "client": [],
   "injectors": {
     "defaultRequire": 1

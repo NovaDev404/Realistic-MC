@@ -1,8 +1,11 @@
 package com.novadev404.realisticmc.terrain;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -13,23 +16,21 @@ public final class BilateralTerrainMesh {
     private static final float SIGMA_SPACE = 1.65f;
     private static final float SIGMA_HEIGHT = 3.0f;
     private static final float CLIFF_HEIGHT = 4.0f;
-    private static final int SEARCH_ABOVE = 12;
-    private static final int SEARCH_BELOW = 32;
-
     private BilateralTerrainMesh() {
     }
 
-    public static Mesh build(BlockGetter level, int centerX, int centerY, int centerZ, int radiusBlocks, int step) {
-        int minX = centerX - radiusBlocks;
-        int minZ = centerZ - radiusBlocks;
-        int size = (radiusBlocks * 2) / step + 1;
+    public static Mesh buildSection(BlockGetter level, SectionPos sectionPos) {
+        int originX = sectionPos.minBlockX();
+        int originY = sectionPos.minBlockY();
+        int originZ = sectionPos.minBlockZ();
+        int size = 17;
         Sample[][] samples = new Sample[size][size];
 
         for (int gx = 0; gx < size; gx++) {
             for (int gz = 0; gz < size; gz++) {
-                int x = minX + gx * step;
-                int z = minZ + gz * step;
-                samples[gx][gz] = sampleColumn(level, x, centerY, z);
+                int x = originX + gx;
+                int z = originZ + gz;
+                samples[gx][gz] = sampleColumn(level, x, originY, originY + 15, z);
             }
         }
 
@@ -52,18 +53,38 @@ public final class BilateralTerrainMesh {
                     continue;
                 }
 
-                Vec3 v00 = new Vec3(s00.x, smoothHeights[gx][gz] + 1.015f, s00.z);
-                Vec3 v10 = new Vec3(s10.x, smoothHeights[gx + 1][gz] + 1.015f, s10.z);
-                Vec3 v11 = new Vec3(s11.x, smoothHeights[gx + 1][gz + 1] + 1.015f, s11.z);
-                Vec3 v01 = new Vec3(s01.x, smoothHeights[gx][gz + 1] + 1.015f, s01.z);
+                boolean touchesSection = isInsideSection(s00.height, originY) || isInsideSection(s10.height, originY)
+                    || isInsideSection(s11.height, originY) || isInsideSection(s01.height, originY);
+                if (!touchesSection) {
+                    continue;
+                }
+
+                Vec3 v00 = new Vec3(gx, smoothHeights[gx][gz] - originY + 1.015f, gz);
+                Vec3 v10 = new Vec3(gx + 1, smoothHeights[gx + 1][gz] - originY + 1.015f, gz);
+                Vec3 v11 = new Vec3(gx + 1, smoothHeights[gx + 1][gz + 1] - originY + 1.015f, gz + 1);
+                Vec3 v01 = new Vec3(gx, smoothHeights[gx][gz + 1] - originY + 1.015f, gz + 1);
                 Vec3 normal = normal(v00, v10, v11);
                 int color = colorFor(s00, s10, s11, s01, normal);
 
-                mesh.quads.add(new Quad(v00, v10, v11, v01, normal, color));
+                mesh.quads.add(new Quad(v00, v10, v11, v01, normal, color, s00.state, s00.blockPos));
+                hide(mesh, s00, originY);
+                hide(mesh, s10, originY);
+                hide(mesh, s11, originY);
+                hide(mesh, s01, originY);
             }
         }
 
         return mesh;
+    }
+
+    private static boolean isInsideSection(float y, int originY) {
+        return y >= originY && y <= originY + 15;
+    }
+
+    private static void hide(Mesh mesh, Sample sample, int originY) {
+        if (isInsideSection(sample.height, originY)) {
+            mesh.hiddenBlocks.add(sample.blockPos.asLong());
+        }
     }
 
     private static float bilateralHeight(Sample[][] samples, int gx, int gz, int size) {
@@ -109,23 +130,41 @@ public final class BilateralTerrainMesh {
         return (float) Math.exp(-valueSq / (2.0f * sigma * sigma));
     }
 
-    private static Sample sampleColumn(BlockGetter level, int x, int centerY, int z) {
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, centerY + SEARCH_ABOVE, z);
-        int bottom = centerY - SEARCH_BELOW;
+    private static Sample sampleColumn(BlockGetter level, int x, int minY, int maxY, int z) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, maxY + 1, z);
 
-        for (int y = centerY + SEARCH_ABOVE; y >= bottom; y--) {
+        for (int y = maxY + 1; y >= minY - 1; y--) {
             pos.set(x, y, z);
             BlockState state = level.getBlockState(pos);
             if (isTerrainSurface(state)) {
-                return new Sample(x, y, z, true, materialGroup(state), baseColor(state));
+                return new Sample(x, y, z, true, materialGroup(state), baseColor(state), state, pos.immutable());
             }
         }
 
-        return new Sample(x, centerY, z, false, 0, 0);
+        return new Sample(x, minY, z, false, 0, 0, Blocks.AIR.defaultBlockState(), new BlockPos(x, minY, z));
     }
 
     private static boolean isTerrainSurface(BlockState state) {
-        return state.isSolidRender() && !state.is(Blocks.BEDROCK) && !state.is(Blocks.BARRIER);
+        return shouldSmoothBlock(state);
+    }
+
+    public static boolean shouldSmoothBlock(BlockState state) {
+        return state.isSolidRender()
+            && (state.is(Blocks.GRASS_BLOCK)
+                || state.is(Blocks.DIRT)
+                || state.is(Blocks.COARSE_DIRT)
+                || state.is(Blocks.PODZOL)
+                || state.is(Blocks.MYCELIUM)
+                || state.is(Blocks.SAND)
+                || state.is(Blocks.RED_SAND)
+                || state.is(Blocks.GRAVEL)
+                || state.is(Blocks.SNOW_BLOCK)
+                || state.is(Blocks.POWDER_SNOW)
+                || state.is(Blocks.STONE)
+                || state.is(Blocks.GRANITE)
+                || state.is(Blocks.DIORITE)
+                || state.is(Blocks.ANDESITE)
+                || state.is(Blocks.DEEPSLATE));
     }
 
     private static int materialGroup(BlockState state) {
@@ -213,15 +252,15 @@ public final class BilateralTerrainMesh {
         return normal.y < 0.0 ? normal.scale(-1.0) : normal;
     }
 
-    public record Mesh(List<Quad> quads) {
+    public record Mesh(List<Quad> quads, Set<Long> hiddenBlocks) {
         public Mesh() {
-            this(new ArrayList<>());
+            this(new ArrayList<>(), new HashSet<>());
         }
     }
 
-    public record Quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3 normal, int color) {
+    public record Quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3 normal, int color, BlockState textureState, BlockPos texturePos) {
     }
 
-    private record Sample(int x, float height, int z, boolean renderable, int materialGroup, int color) {
+    private record Sample(int x, float height, int z, boolean renderable, int materialGroup, int color, BlockState state, BlockPos blockPos) {
     }
 }
