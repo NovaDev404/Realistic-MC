@@ -12,7 +12,11 @@ public class RealisticMCClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            boolean ready = smoothTerrainEnabled && client.level != null && client.player != null;
+            boolean ready = smoothTerrainEnabled
+                && client.level != null
+                && client.player != null
+                && client.gameMode != null
+                && client.levelRenderer != null;
             smoothTerrainRuntimeReady = ready;
 
             if (ready && !rebuiltForSmoothTerrain) {

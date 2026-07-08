@@ -46,8 +46,10 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(SectionCompiler.class)
 public abstract class SectionCompilerMixin {
@@ -75,13 +77,26 @@ public abstract class SectionCompilerMixin {
     @Final
     private BlockEntityRenderDispatcher blockEntityRenderer;
 
-    /**
-     * @author NovaDev404, Codex
-     * @reason Replace vanilla exposed natural terrain block models with a bilateral-smoothed textured section mesh.
-     */
-    @Overwrite
-    public SectionCompiler.Results compile(
-        final SectionPos sectionPos, final RenderSectionRegion region, final VertexSorting vertexSorting, final SectionBufferBuilderPack builders
+    @Inject(method = "compile", at = @At("HEAD"), cancellable = true)
+    private void realisticmc$compileWithSmoothing(
+        final SectionPos sectionPos,
+        final RenderSectionRegion region,
+        final VertexSorting vertexSorting,
+        final SectionBufferBuilderPack builders,
+        final CallbackInfoReturnable<SectionCompiler.Results> cir
+    ) {
+        if (!RealisticMCClient.smoothTerrainRuntimeReady) {
+            return;
+        }
+
+        cir.setReturnValue(this.realisticmc$compileReplacement(sectionPos, region, vertexSorting, builders));
+    }
+
+    private SectionCompiler.Results realisticmc$compileReplacement(
+        final SectionPos sectionPos,
+        final RenderSectionRegion region,
+        final VertexSorting vertexSorting,
+        final SectionBufferBuilderPack builders
     ) {
         SectionCompiler.Results results = new SectionCompiler.Results();
         BlockPos minPos = sectionPos.origin();
@@ -91,7 +106,7 @@ public abstract class SectionCompilerMixin {
         ModelBlockRenderer blockRenderer = new ModelBlockRenderer(this.ambientOcclusion, true, this.blockColors);
         FluidRenderer fluidRenderer = new FluidRenderer(this.fluidModelSet);
         Map<ChunkSectionLayer, BufferBuilder> startedLayers = new EnumMap<>(ChunkSectionLayer.class);
-        BilateralTerrainMesh.Mesh smoothMesh = RealisticMCClient.smoothTerrainEnabled ? BilateralTerrainMesh.buildSection(region, sectionPos) : new BilateralTerrainMesh.Mesh();
+        BilateralTerrainMesh.Mesh smoothMesh = RealisticMCClient.smoothTerrainRuntimeReady ? BilateralTerrainMesh.buildSection(region, sectionPos) : new BilateralTerrainMesh.Mesh();
 
         BlockQuadOutput quadOutput = (x, y, z, quad, instance) -> {
             BufferBuilder builder = this.getOrBeginLayer(startedLayers, builders, quad.materialInfo().layer());
@@ -176,10 +191,25 @@ public abstract class SectionCompilerMixin {
         for (BilateralTerrainMesh.Quad quad : mesh.quads()) {
             TextureAtlasSprite sprite = spriteFor(quad.textureState(), quad.texturePos());
             int color = tintColor(region, quad.textureState(), quad.texturePos(), quad.color());
-            putVertex(builder, quad.a(), quad.normal(), sprite, color, 0.0f, 0.0f);
-            putVertex(builder, quad.b(), quad.normal(), sprite, color, 1.0f, 0.0f);
-            putVertex(builder, quad.c(), quad.normal(), sprite, color, 1.0f, 1.0f);
-            putVertex(builder, quad.d(), quad.normal(), sprite, color, 0.0f, 1.0f);
+
+            Vec3 a = quad.a();
+            Vec3 b = quad.b();
+            Vec3 c = quad.c();
+            Vec3 d = quad.d();
+            Vec3 normal = quad.normal();
+
+            // Keep vertex winding consistent with normal to avoid front-face culling artifacts.
+            Vec3 windingNormal = b.subtract(a).cross(c.subtract(a));
+            if (windingNormal.dot(normal) < 0.0) {
+                Vec3 tmp = b;
+                b = d;
+                d = tmp;
+            }
+
+            putVertex(builder, a, normal, sprite, color, 0.0f, 0.0f);
+            putVertex(builder, b, normal, sprite, color, 1.0f, 0.0f);
+            putVertex(builder, c, normal, sprite, color, 1.0f, 1.0f);
+            putVertex(builder, d, normal, sprite, color, 0.0f, 1.0f);
         }
     }
 
