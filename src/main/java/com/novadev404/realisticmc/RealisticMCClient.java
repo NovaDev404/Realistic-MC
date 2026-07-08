@@ -1,6 +1,8 @@
 package com.novadev404.realisticmc;
 
+import com.novadev404.realisticmc.command.SmoothCommand;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 
@@ -26,6 +28,10 @@ public class RealisticMCClient implements ClientModInitializer {
             } else if (!ready) {
                 rebuiltForSmoothTerrain = false;
             }
+        });
+
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            SmoothCommand.register(dispatcher, registryAccess);
         });
 
         System.out.println("Realistic MC: bilateral chunk terrain mesher initialized");
