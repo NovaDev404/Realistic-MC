@@ -24,12 +24,13 @@ public final class BilateralTerrainMesh {
         int originY = sectionPos.minBlockY();
         int originZ = sectionPos.minBlockZ();
         int size = 17;
-        Sample[][] samples = new Sample[size][size];
+        int paddedSize = size + RADIUS * 2;
+        Sample[][] samples = new Sample[paddedSize][paddedSize];
 
-        for (int gx = 0; gx < size; gx++) {
-            for (int gz = 0; gz < size; gz++) {
-                int x = originX + gx;
-                int z = originZ + gz;
+        for (int gx = 0; gx < paddedSize; gx++) {
+            for (int gz = 0; gz < paddedSize; gz++) {
+                int x = originX + gx - RADIUS;
+                int z = originZ + gz - RADIUS;
                 samples[gx][gz] = sampleColumn(level, x, originY, originY + 15, z);
             }
         }
@@ -37,17 +38,17 @@ public final class BilateralTerrainMesh {
         float[][] smoothHeights = new float[size][size];
         for (int gx = 0; gx < size; gx++) {
             for (int gz = 0; gz < size; gz++) {
-                smoothHeights[gx][gz] = bilateralHeight(samples, gx, gz, size);
+                smoothHeights[gx][gz] = bilateralHeight(samples, gx + RADIUS, gz + RADIUS, paddedSize);
             }
         }
 
         Mesh mesh = new Mesh();
         for (int gx = 0; gx < size - 1; gx++) {
             for (int gz = 0; gz < size - 1; gz++) {
-                Sample s00 = samples[gx][gz];
-                Sample s10 = samples[gx + 1][gz];
-                Sample s11 = samples[gx + 1][gz + 1];
-                Sample s01 = samples[gx][gz + 1];
+                Sample s00 = samples[gx + RADIUS][gz + RADIUS];
+                Sample s10 = samples[gx + 1 + RADIUS][gz + RADIUS];
+                Sample s11 = samples[gx + 1 + RADIUS][gz + 1 + RADIUS];
+                Sample s01 = samples[gx + RADIUS][gz + 1 + RADIUS];
 
                 if (!s00.renderable || !s10.renderable || !s11.renderable || !s01.renderable) {
                     continue;
@@ -75,6 +76,30 @@ public final class BilateralTerrainMesh {
         }
 
         return mesh;
+    }
+
+    public static double sampleSmoothedTerrainY(BlockGetter level, double worldX, double worldY, double worldZ) {
+        int size = RADIUS * 2 + 1;
+        Sample[][] samples = new Sample[size][size];
+        int centerX = (int) Math.floor(worldX);
+        int centerZ = (int) Math.floor(worldZ);
+        int minY = (int) Math.floor(worldY) - 8;
+        int maxY = (int) Math.floor(worldY) + 8;
+
+        for (int gx = 0; gx < size; gx++) {
+            for (int gz = 0; gz < size; gz++) {
+                int x = centerX + gx - RADIUS;
+                int z = centerZ + gz - RADIUS;
+                samples[gx][gz] = sampleColumn(level, x, minY, maxY, z);
+            }
+        }
+
+        Sample center = samples[RADIUS][RADIUS];
+        if (!center.renderable) {
+            return Double.NaN;
+        }
+
+        return bilateralHeight(samples, RADIUS, RADIUS, size) + 1.015;
     }
 
     private static boolean isInsideSection(float y, int originY) {

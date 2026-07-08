@@ -189,14 +189,14 @@ public abstract class SectionCompilerMixin {
     ) {
         BufferBuilder builder = this.getOrBeginLayer(startedLayers, builders, ChunkSectionLayer.SOLID);
         for (BilateralTerrainMesh.Quad quad : mesh.quads()) {
-            TextureAtlasSprite sprite = spriteFor(quad.textureState(), quad.texturePos());
-            int color = tintColor(region, quad.textureState(), quad.texturePos(), quad.color());
-
             Vec3 a = quad.a();
             Vec3 b = quad.b();
             Vec3 c = quad.c();
             Vec3 d = quad.d();
             Vec3 normal = quad.normal();
+
+            TextureAtlasSprite sprite = spriteFor(quad.textureState(), quad.texturePos(), normal);
+            int color = tintColor(region, quad.textureState(), quad.texturePos(), quad.color());
 
             // Keep vertex winding consistent with normal to avoid front-face culling artifacts.
             Vec3 windingNormal = b.subtract(a).cross(c.subtract(a));
@@ -206,18 +206,78 @@ public abstract class SectionCompilerMixin {
                 d = tmp;
             }
 
-            putVertex(builder, a, normal, sprite, color, 0.0f, 0.0f);
-            putVertex(builder, b, normal, sprite, color, 1.0f, 0.0f);
-            putVertex(builder, c, normal, sprite, color, 1.0f, 1.0f);
-            putVertex(builder, d, normal, sprite, color, 0.0f, 1.0f);
+            float uBlocks = (float) Math.max(0.001, a.distanceTo(b));
+            float vBlocks = (float) Math.max(0.001, a.distanceTo(d));
+            emitTiledQuad(builder, sprite, color, normal, a, b, c, d, uBlocks, vBlocks);
         }
     }
 
-    private TextureAtlasSprite spriteFor(BlockState state, BlockPos pos) {
+    private static void emitTiledQuad(
+        BufferBuilder builder,
+        TextureAtlasSprite sprite,
+        int color,
+        Vec3 normal,
+        Vec3 a,
+        Vec3 b,
+        Vec3 c,
+        Vec3 d,
+        float uBlocks,
+        float vBlocks
+    ) {
+        int uTiles = Math.max(1, (int) Math.ceil(uBlocks));
+        int vTiles = Math.max(1, (int) Math.ceil(vBlocks));
+
+        for (int iu = 0; iu < uTiles; iu++) {
+            float u0 = iu;
+            float u1 = Math.min(uBlocks, iu + 1.0f);
+            float s0 = u0 / uBlocks;
+            float s1 = u1 / uBlocks;
+            float uLocalMax = u1 - u0;
+
+            for (int iv = 0; iv < vTiles; iv++) {
+                float v0 = iv;
+                float v1 = Math.min(vBlocks, iv + 1.0f);
+                float t0 = v0 / vBlocks;
+                float t1 = v1 / vBlocks;
+                float vLocalMax = v1 - v0;
+
+                Vec3 p00 = bilerp(a, b, c, d, s0, t0);
+                Vec3 p10 = bilerp(a, b, c, d, s1, t0);
+                Vec3 p11 = bilerp(a, b, c, d, s1, t1);
+                Vec3 p01 = bilerp(a, b, c, d, s0, t1);
+
+                putVertex(builder, p00, normal, sprite, color, 0.0f, 0.0f);
+                putVertex(builder, p10, normal, sprite, color, uLocalMax, 0.0f);
+                putVertex(builder, p11, normal, sprite, color, uLocalMax, vLocalMax);
+                putVertex(builder, p01, normal, sprite, color, 0.0f, vLocalMax);
+            }
+        }
+    }
+
+    private static Vec3 bilerp(Vec3 a, Vec3 b, Vec3 c, Vec3 d, float s, float t) {
+        Vec3 ab = a.scale(1.0 - s).add(b.scale(s));
+        Vec3 dc = d.scale(1.0 - s).add(c.scale(s));
+        return ab.scale(1.0 - t).add(dc.scale(t));
+    }
+
+    private TextureAtlasSprite spriteFor(BlockState state, BlockPos pos, Vec3 normal) {
         RandomSource random = RandomSource.create(state.getSeed(pos));
         List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts = new ArrayList<>();
         this.blockModelSet.get(state).collectParts(random, parts);
+
+        Direction preferred = dominantDirection(normal);
+        for (net.minecraft.client.renderer.block.dispatch.BlockStateModelPart part : parts) {
+            List<BakedQuad> quads = part.getQuads(preferred);
+            if (!quads.isEmpty()) {
+                return quads.getFirst().materialInfo().sprite();
+            }
+        }
+
         for (Direction direction : new Direction[]{Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.DOWN}) {
+            if (direction == preferred) {
+                continue;
+            }
+
             for (net.minecraft.client.renderer.block.dispatch.BlockStateModelPart part : parts) {
                 List<BakedQuad> quads = part.getQuads(direction);
                 if (!quads.isEmpty()) {
@@ -234,6 +294,21 @@ public abstract class SectionCompilerMixin {
         }
 
         return parts.isEmpty() ? this.blockModelSet.missingModel().particleMaterial().sprite() : parts.getFirst().particleMaterial().sprite();
+    }
+
+    private static Direction dominantDirection(Vec3 normal) {
+        double ax = Math.abs(normal.x);
+        double ay = Math.abs(normal.y);
+        double az = Math.abs(normal.z);
+        if (ay >= ax && ay >= az) {
+            return normal.y >= 0.0 ? Direction.UP : Direction.DOWN;
+        }
+
+        if (ax >= az) {
+            return normal.x >= 0.0 ? Direction.EAST : Direction.WEST;
+        }
+
+        return normal.z >= 0.0 ? Direction.SOUTH : Direction.NORTH;
     }
 
     private int tintColor(RenderSectionRegion region, BlockState state, BlockPos pos, int fallbackColor) {
