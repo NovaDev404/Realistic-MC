@@ -25,10 +25,16 @@ public class SectionCompilerMixin {
     @Shadow
     private SectionPos sectionPos;
     
-    // Inject at the END of compile() to add smooth terrain generation
-    // This runs after vanilla block compilation, reducing interference with initialization
+    // COMPLETELY DISABLED - SectionCompiler.compile() is called during world loading
+    // This triggers MultiPlayerGameMode.tick before player is initialized, causing crash
+    // Need to find a completely different approach that doesn't hook into chunk compilation
+    
     @Inject(method = "compile", at = @At("RETURN"))
     private void realisticmc$afterCompile(SectionBufferBuilderPack buffers, CallbackInfo ci) {
+        // DISABLED - crashes during world loading
+        return;
+        
+        /*
         // Generate smooth terrain after vanilla block compilation
         // Add null checks to prevent crashes during initialization
         if (level == null || sectionPos == null) {
@@ -55,5 +61,6 @@ public class SectionCompilerMixin {
             // If buffer access fails, fall back to no-vertex output
             generator.generateSmoothTerrain();
         }
+        */
     }
 }
