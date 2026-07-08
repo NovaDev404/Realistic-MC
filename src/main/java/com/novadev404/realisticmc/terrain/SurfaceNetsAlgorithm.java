@@ -126,22 +126,91 @@ public class SurfaceNetsAlgorithm {
     }
     
     private void generateFaces(SurfaceMeshData meshData) {
-        // Simplified face generation - connect vertices in a grid pattern
-        // Full implementation would use proper adjacency detection
-        int size = CHUNK_SIZE;
-        for (int x = 0; x < size - 1; x++) {
-            for (int y = 0; y < size - 1; y++) {
-                for (int z = 0; z < size - 1; z++) {
-                    int idx = x + y * size + z * size * size;
-                    if (idx + 1 < meshData.getVertices().size() && 
-                        idx + size < meshData.getVertices().size() &&
-                        idx + size + 1 < meshData.getVertices().size()) {
-                        // Add quad face
-                        meshData.addFace(idx, idx + 1, idx + size + 1, idx + size);
+        // Generate faces by connecting neighboring vertices that share edges
+        // This is a simplified approach - proper Surface Nets uses adjacency detection
+        
+        // For each cell that contains a surface, generate faces connecting to neighbors
+        for (int x = 0; x < CHUNK_SIZE; x++) {
+            for (int y = 0; y < CHUNK_SIZE; y++) {
+                for (int z = 0; z < CHUNK_SIZE; z++) {
+                    if (cellContainsSurface(x, y, z)) {
+                        // Check each of the 6 faces of the cube
+                        // Generate quads for faces where the surface passes through
+                        
+                        // +X face
+                        if (shouldGenerateFace(x, y, z, 1, 0, 0)) {
+                            generateQuadFace(meshData, x, y, z, 1, 0, 0);
+                        }
+                        // -X face
+                        if (shouldGenerateFace(x, y, z, -1, 0, 0)) {
+                            generateQuadFace(meshData, x, y, z, -1, 0, 0);
+                        }
+                        // +Y face
+                        if (shouldGenerateFace(x, y, z, 0, 1, 0)) {
+                            generateQuadFace(meshData, x, y, z, 0, 1, 0);
+                        }
+                        // -Y face
+                        if (shouldGenerateFace(x, y, z, 0, -1, 0)) {
+                            generateQuadFace(meshData, x, y, z, 0, -1, 0);
+                        }
+                        // +Z face
+                        if (shouldGenerateFace(x, y, z, 0, 0, 1)) {
+                            generateQuadFace(meshData, x, y, z, 0, 0, 1);
+                        }
+                        // -Z face
+                        if (shouldGenerateFace(x, y, z, 0, 0, -1)) {
+                            generateQuadFace(meshData, x, y, z, 0, 0, -1);
+                        }
                     }
                 }
             }
         }
+    }
+    
+    private boolean shouldGenerateFace(int x, int y, int z, int dx, int dy, int dz) {
+        // Check if the neighbor in this direction has different density
+        float currentDensity = getDensity(x, y, z);
+        float neighborDensity = getDensity(x + dx, y + dy, z + dz);
+        
+        // Generate face if there's a surface crossing between these cells
+        return (currentDensity >= ISO_LEVEL && neighborDensity < ISO_LEVEL) ||
+               (currentDensity < ISO_LEVEL && neighborDensity >= ISO_LEVEL);
+    }
+    
+    private void generateQuadFace(SurfaceMeshData meshData, int x, int y, int z, int dx, int dy, int dz) {
+        // Generate a quad face for the given direction
+        // This is a simplified implementation - proper implementation would use interpolated vertices
+        
+        // Calculate the 4 corners of the face
+        float[] corners = new float[12]; // 4 vertices * 3 coordinates
+        
+        if (dx != 0) {
+            // X-facing face
+            corners[0] = x + dx; corners[1] = y; corners[2] = z;
+            corners[3] = x + dx; corners[4] = y; corners[5] = z + 1;
+            corners[6] = x + dx; corners[7] = y + 1; corners[8] = z + 1;
+            corners[9] = x + dx; corners[10] = y + 1; corners[11] = z;
+        } else if (dy != 0) {
+            // Y-facing face
+            corners[0] = x; corners[1] = y + dy; corners[2] = z;
+            corners[3] = x + 1; corners[4] = y + dy; corners[5] = z;
+            corners[6] = x + 1; corners[7] = y + dy; corners[8] = z + 1;
+            corners[9] = x; corners[10] = y + dy; corners[11] = z + 1;
+        } else {
+            // Z-facing face
+            corners[0] = x; corners[1] = y; corners[2] = z + dz;
+            corners[3] = x + 1; corners[4] = y; corners[5] = z + dz;
+            corners[6] = x + 1; corners[7] = y + 1; corners[8] = z + dz;
+            corners[9] = x; corners[10] = y + 1; corners[11] = z + dz;
+        }
+        
+        // Add vertices and create face
+        int v0 = meshData.addVertex(chunkX * CHUNK_SIZE + corners[0], chunkY * CHUNK_SIZE + corners[1], chunkZ * CHUNK_SIZE + corners[2]);
+        int v1 = meshData.addVertex(chunkX * CHUNK_SIZE + corners[3], chunkY * CHUNK_SIZE + corners[4], chunkZ * CHUNK_SIZE + corners[5]);
+        int v2 = meshData.addVertex(chunkX * CHUNK_SIZE + corners[6], chunkY * CHUNK_SIZE + corners[7], chunkZ * CHUNK_SIZE + corners[8]);
+        int v3 = meshData.addVertex(chunkX * CHUNK_SIZE + corners[9], chunkY * CHUNK_SIZE + corners[10], chunkZ * CHUNK_SIZE + corners[11]);
+        
+        meshData.addFace(v0, v1, v2, v3);
     }
     
     public static class SurfaceMeshData {
