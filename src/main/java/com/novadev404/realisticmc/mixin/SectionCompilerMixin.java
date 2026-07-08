@@ -3,8 +3,8 @@ package com.novadev404.realisticmc.mixin;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.novadev404.realisticmc.RealisticMCClient;
 import com.novadev404.realisticmc.terrain.SmoothTerrainMeshGenerator;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.chunk.SectionCompiler;
@@ -34,10 +34,8 @@ public class SectionCompilerMixin {
             return;
         }
         
-        // Only generate smooth terrain if the player exists and world is fully loaded
-        // This prevents crashes during initial world generation/loading
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.level == null) {
+        // Only generate smooth terrain if enabled by the client tick event
+        if (!RealisticMCClient.smoothTerrainEnabled) {
             return;
         }
         
