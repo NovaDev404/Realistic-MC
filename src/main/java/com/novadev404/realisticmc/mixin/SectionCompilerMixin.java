@@ -25,30 +25,22 @@ public class SectionCompilerMixin {
     @Shadow
     private SectionPos sectionPos;
     
-    // COMPLETELY DISABLED - SectionCompiler.compile() is called during world loading
-    // This triggers MultiPlayerGameMode.tick before player is initialized, causing crash
-    // Need to find a completely different approach that doesn't hook into chunk compilation
+    // Re-enabled - using LevelRenderEvents approach instead
+    // This Mixin is kept as backup but the main approach is now LevelRenderEvents
     
     @Inject(method = "compile", at = @At("RETURN"))
     private void realisticmc$afterCompile(SectionBufferBuilderPack buffers, CallbackInfo ci) {
-        // DISABLED - crashes during world loading
-        return;
-        
-        /*
-        // Generate smooth terrain after vanilla block compilation
-        // Add null checks to prevent crashes during initialization
-        if (level == null || sectionPos == null) {
+        // Only use this if LevelRenderEvents approach doesn't work
+        if (!RealisticMCClient.smoothTerrainEnabled) {
             return;
         }
         
-        // Only generate smooth terrain if enabled by the client tick event
-        if (!RealisticMCClient.smoothTerrainEnabled) {
+        if (level == null || sectionPos == null) {
             return;
         }
         
         SmoothTerrainMeshGenerator generator = new SmoothTerrainMeshGenerator(level, sectionPos, true);
         
-        // Get the ByteBufferBuilder for the solid render layer and wrap it in BufferBuilder
         try {
             var byteBuffer = buffers.buffer(ChunkSectionLayer.SOLID);
             var bufferBuilder = new BufferBuilder(
@@ -58,9 +50,7 @@ public class SectionCompilerMixin {
             );
             generator.generateSmoothTerrain(bufferBuilder);
         } catch (Exception e) {
-            // If buffer access fails, fall back to no-vertex output
             generator.generateSmoothTerrain();
         }
-        */
     }
 }
