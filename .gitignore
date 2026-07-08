@@ -17,3 +17,8 @@ Thumbs.db
 
 # Minecraft
 run/
+
+# Development
+mc_*_client.jar
+mc_*_client_source/
+vineflower.jar
