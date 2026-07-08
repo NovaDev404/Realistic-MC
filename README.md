@@ -65,8 +65,9 @@ The following natural terrain blocks are smoothed:
 
 1. Download the latest `realisticmc-1.0.0.jar` from the [releases](../../releases) page
 2. Install [Fabric Loader](https://fabricmc.net/wiki/installation/)
-3. Place the jar file in your `.minecraft/mods` folder
-4. Launch Minecraft
+3. Install [Fabric API](https://modrinth.com/mod/fabric-api?loader=fabric#download) (required)
+4. Place both jar files in your `.minecraft/mods` folder
+5. Launch Minecraft
 
 ## Configuration
 
